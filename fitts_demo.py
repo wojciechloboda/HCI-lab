@@ -2,24 +2,23 @@
 """
 fitts_demo.py
 
-Interactive Fitts' Law demo (requires pygame) and a --simulate mode that runs
+Interactive Fitts' Law demo (requires pygame) that runs
 a quick simulated experiment and outputs results for analysis.
 
-Usage:
-  Interactive (requires pygame): python fitts_demo.py
-  Simulate (no GUI needed):     python fitts_demo.py --simulate
+Usage (requires pygame):
+  python fitts_demo.py
 
 The interactive mode shows circular targets; click them as they appear. The script logs
 Movement Time (MT), Distance (D), Width (W) and computes Index of Difficulty (ID).
 After the session ends it fits MT = a + b * ID and shows a plot and saves CSV.
 """
 
-import sys
 import math
-import csv
 import random
 import argparse
 import time
+import datetime
+import os
 
 try:
     import pygame
@@ -33,25 +32,6 @@ import matplotlib.pyplot as plt
 def index_of_difficulty(D, W):
     # D and W must be positive. Fitts' original formula: ID = log2( D / W + 1 )
     return math.log2(D / W + 1.0)
-
-def run_simulation(trials=40, seed=1):
-    random.seed(seed)
-    np.random.seed(seed)
-    # Choose a variety of distances and widths
-    widths = np.array([20, 40, 80, 160])  # pixels
-    distances = np.array([50, 100, 200, 400])  # pixels
-    rows = []
-    # underlying true parameters (simulate human behavior)
-    a_true = 150.0  # ms (intercept)
-    b_true = 100.0  # ms/bit (slope)
-    for i in range(trials):
-        W = float(random.choice(widths))
-        D = float(random.choice(distances))
-        ID = index_of_difficulty(D, W)
-        # Simulated MT (ms) with some noise
-        mt = a_true + b_true * ID + np.random.normal(scale=40.0)
-        rows.append({"trial": i+1, "D": D, "W": W, "ID": ID, "MT": mt})
-    return pd.DataFrame(rows)
 
 def fit_linear(df):
     # Fit MT = a + b * ID using numpy.polyfit
@@ -69,7 +49,6 @@ def save_csv(df, out_path):
     df.to_csv(out_path, index=False)
 
 def show_plot(df, fit_result, title="Fitts' Law (MT vs ID)"):
-    import matplotlib.pyplot as plt
     x = df["ID"].values
     y = df["MT"].values
     # Single plot only (no explicit color)
@@ -84,7 +63,7 @@ def show_plot(df, fit_result, title="Fitts' Law (MT vs ID)"):
     fig.tight_layout()
     plt.show()
 
-def interactive_mode(num_trials=30):
+def run_trials(num_trials=30):
     if pygame is None:
         print("Pygame not available. Install pygame to use interactive mode: pip install pygame")
         return
@@ -113,14 +92,29 @@ def interactive_mode(num_trials=30):
     D = None
     W = target_radius * 2
 
-    running = True
-    while running:
+    running = False
+    quit = False
+    while not quit:
+        while not running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    quit = True
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        quit = True
+                    else:
+                        running = True
+                screen.fill((240,240,240))
+                txt = font.render(f"Press any key to start. Then click the circle. Esc to quit.", True, (0,0,0))
+                screen.blit(txt, (10,10))
+                pygame.display.flip()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                quit = True
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    running = False
+                    quit = True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if waiting_for_click and target_pos is not None:
                     mx,my = event.pos
@@ -136,7 +130,7 @@ def interactive_mode(num_trials=30):
 
         if not waiting_for_click:
             if trial_idx >= num_trials:
-                running = False
+                quit = True
                 continue
             # spawn next
             target_pos = spawn_target()
@@ -159,32 +153,35 @@ def interactive_mode(num_trials=30):
 
     pygame.quit()
     # convert to DataFrame
-    import pandas as pd
     return pd.DataFrame(trials)
 
+def get_filepath(dirname):
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d--%H-%M')
+    filename = timestamp + ".csv"
+    if not os.path.isdir(dirname):
+        os.mkdir(dirname)
+    return os.path.join(dirname, filename)
+
 def main():
-    parser = argparse.ArgumentParser(description="Fitts' Law demo (interactive and simulate modes)")
-    parser.add_argument("--simulate", action="store_true", help="Run a simulated experiment (no GUI)")
-    parser.add_argument("--trials", type=int, default=40, help="Number of trials for simulate or interactive mode")
-    parser.add_argument("--out", type=str, default="fitts_demo_results.csv", help="CSV output filename")
+    parser = argparse.ArgumentParser(description="Fitts' Law demo")
+    parser.add_argument("--trials", type=int, default=40, help="Number of trials")
+    parser.add_argument("--out", type=str, default="results", help="CSV output foldername")
     args = parser.parse_args()
 
-    if args.simulate:
-        df = run_simulation(trials=args.trials)
-    else:
-        df = interactive_mode(num_trials=args.trials)
-        if df is None or df.empty:
-            print("No trials recorded.")
-            return
+    df = run_trials(num_trials=args.trials)
+    if df is None or df.empty:
+        print("No trials recorded.")
+        return
 
     fit = fit_linear(df)
     print("Fit result:", fit)
-    df.to_csv(args.out, index=False)
+    filepath = get_filepath(args.out)
+    df.to_csv(filepath, index=False)
     try:
         show_plot(df, fit)
     except Exception as e:
         print("Plotting failed:", e)
-    print("Saved results to", args.out)
+    print("Saved results to", filepath)
 
 if __name__ == "__main__":
     main()
