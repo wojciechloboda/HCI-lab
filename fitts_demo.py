@@ -12,9 +12,7 @@ try:
 except Exception:
     pygame = None
 
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # Screen PPI, needed for cm to pixel calculations (per device)
 PPI = 96 
@@ -59,7 +57,7 @@ def run_trials(conditions, trials_per_condition):
     D = None
     W = None
 
-    # create the list of indices, make every contiion apear as meany times as specified by the parameter and ....
+    # create the list of indices, make every condition apear as meany times as specified by the parameter and ....
     condition_indices = []
     for i in range(len(conditions)):
         condition_indices.extend([i] * trials_per_condition)
@@ -156,14 +154,13 @@ def main():
 
     # (D, W) in cm
     conditions = [
-        (10, 1),
-        (5, 2),
-        (20, 1),
-        (15, 2),
+        (12, 4), (9, 3), (6, 2), (3, 1),                    # difficulty 2
+        (14, 2), (7, 1), (3.5, 0.5), (1.75, 0.25),          # difficulty 3
+        (15, 1), (11.25, 0.75), (7.5, 0.5), (3.75, 0.25)    # difficulty 4
     ]
 
-    # How many times we repreat each condition
-    trials_per_condition = 2
+    # How many times we repeat each condition
+    trials_per_condition = 5
 
     df = run_trials(conditions, trials_per_condition)
 
